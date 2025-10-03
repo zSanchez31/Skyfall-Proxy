@@ -1,0 +1,196 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
+}
+
+group = 's.zSanchez'
+version = '1.20-R0.1'
+description = 'Skyfall Proxy - Advanced Minecraft Proxy Server'
+
+sourceCompatibility = 11
+targetCompatibility = 11
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.yaml:snakeyaml:2.2'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'org.slf4j:slf4j-simple:2.0.9'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+}
+
+application {
+    mainClass = 's.zSanchez.Skyfall'
+    applicationName = 'Skyfall'
+}
+
+shadowJar {
+    archiveBaseName.set('Skyfall')
+    archiveClassifier.set('')
+    archiveVersion.set(version)
+
+    manifest {
+        attributes(
+                'Main-Class': 's.zSanchez.Skyfall',
+                'Implementation-Title': 'Skyfall Proxy',
+                'Implementation-Version': version,
+                'Implementation-Vendor': 'SkyfallMC',
+                'Built-By': System.getProperty('user.name'),
+                'Built-Date': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                'Created-By': "Gradle ${gradle.gradleVersion}",
+                'Multi-Release': 'true'
+        )
+    }
+
+    minimize {
+        exclude(dependency('org.yaml:snakeyaml:.*'))
+        exclude(dependency('org.slf4j:.*'))
+    }
+
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+    exclude 'META-INF/maven/**'
+}
+
+jar {
+    enabled = false
+    dependsOn shadowJar
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:unchecked', '-Xlint:deprecation']
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+    }
+}
+
+task copyConfig(type: Copy) {
+    from 'config.yml'
+    into 'build/dist'
+}
+
+task createStructure {
+    doLast {
+        def dirs = ['build/dist/plugins', 'build/dist/modules', 'build/dist/logs']
+        dirs.each { dir ->
+            def folder = file(dir)
+            if (!folder.exists()) {
+                folder.mkdirs()
+                println "Created directory: ${dir}"
+            }
+        }
+    }
+}
+
+task dist {
+    dependsOn shadowJar, createStructure, copyConfig
+
+    doLast {
+        def distDir = file('build/dist')
+        def jarFile = shadowJar.archiveFile.get().asFile
+
+        copy {
+            from jarFile
+            into distDir
+            rename { 'Skyfall.jar' }
+        }
+
+        def startScript = new File(distDir, 'start.sh')
+        startScript.text = '''#!/bin/bash
+JAVA_ARGS="-Xms512M -Xmx1G -XX:+UseG1GC -XX:G1HeapRegionSize=4M"
+java $JAVA_ARGS -jar Skyfall.jar nogui
+'''
+        startScript.setExecutable(true)
+
+        def startBat = new File(distDir, 'start.bat')
+        startBat.text = '''@echo off
+set JAVA_ARGS=-Xms512M -Xmx1G -XX:+UseG1GC -XX:G1HeapRegionSize=4M
+java %JAVA_ARGS% -jar Skyfall.jar nogui
+pause
+'''
+
+        println "Distribution created at: ${distDir.absolutePath}"
+    }
+}
+
+task runDev(type: JavaExec) {
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 's.zSanchez.Skyfall'
+    args 'nogui'
+    standardInput = System.in
+
+    jvmArgs = ['-Xms512M', '-Xmx1G', '-XX:+UseG1GC']
+}
+
+task cleanAll(type: Delete) {
+    dependsOn clean
+    delete 'logs', 'plugins', 'modules', 'config.yml'
+}
+
+javadoc {
+    options {
+        encoding = 'UTF-8'
+        charSet = 'UTF-8'
+        author = true
+        version = true
+        windowTitle = 'Skyfall Proxy API Documentation'
+        docTitle = 'Skyfall Proxy API Documentation'
+        bottom = 'Copyright © 2024 SkyfallMC. All rights reserved.'
+    }
+}
+
+task info {
+    doLast {
+        println """
+        ==========================================
+                  Skyfall Proxy
+        ==========================================
+        Project: ${project.name}
+        Group: ${project.group}
+        Version: ${project.version}
+        Description: ${project.description}
+        Java Version: ${sourceCompatibility}
+        Gradle Version: ${gradle.gradleVersion}
+        ==========================================
+        """.stripIndent()
+    }
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDirs = ['src/main/resources']
+            includes = ['**/*.yml', '**/*.properties']
+        }
+    }
+}
+
+gradle.buildFinished {
+    if (it.failure) {
+        println "Build FAILED"
+    } else {
+        println """
+        ==========================================
+        Build completed successfully!
+        Artifact: ${shadowJar.archiveFile.get().asFile.name}
+        Location: ${shadowJar.archiveFile.get().asFile.parent}
+        ==========================================
+        Run 'gradle dist' to create distribution
+        Run 'gradle runDev' to start in dev mode
+        ==========================================
+        """.stripIndent()
+    }
+}
