@@ -205,6 +205,18 @@ public class Skyfall {
                         // Plugin doesn't have setAPI method, ignore
                     }
 
+                    // Set data folder for plugins that need it
+                    try {
+                        Method setDataFolderMethod = pluginClass.getMethod("setDataFolder", File.class);
+                        File pluginDataFolder = new File(getJarDirectory(), "plugins/" + name);
+                        if (!pluginDataFolder.exists()) {
+                            pluginDataFolder.mkdirs();
+                        }
+                        setDataFolderMethod.invoke(plugin, pluginDataFolder);
+                    } catch (NoSuchMethodException e) {
+                        // Plugin doesn't have setDataFolder method, ignore
+                    }
+
                     loadedPlugins.add(plugin);
                 }
             }
@@ -787,6 +799,19 @@ public class Skyfall {
                     LOGGER.info("Executed command: " + line);
                 }
 
+                // Manejar comandos del PluginDeveloperTools usando reflection
+                boolean handledByPlugin = false;
+                if (command.equals("devtools") || command.equals("pdt") ||
+                        command.equals("plugin") || command.equals("pl")) {
+
+                    handledByPlugin = handlePluginCommand(command, parts);
+                }
+
+                if (handledByPlugin) {
+                    continue; // El plugin ya manejó el comando
+                }
+
+                // Comandos normales de Skyfall
                 switch (command) {
                     case "end":
                     case "stop":
@@ -870,6 +895,29 @@ public class Skyfall {
             }
         }
         scanner.close();
+    }
+
+    // Nuevo método para manejar comandos de plugins usando reflection
+    private static boolean handlePluginCommand(String command, String[] parts) {
+        for (SkyfallPlugin plugin : loadedPlugins) {
+            try {
+                // Usar reflection para detectar si el plugin tiene el método handleCommand
+                Method handleCommandMethod = plugin.getClass().getMethod("handleCommand", String.class, String[].class);
+
+                // Llamar al método handleCommand del plugin
+                Object result = handleCommandMethod.invoke(plugin, command, Arrays.copyOfRange(parts, 1, parts.length));
+
+                if (result instanceof Boolean && (Boolean) result) {
+                    return true; // El plugin manejó el comando
+                }
+            } catch (NoSuchMethodException e) {
+                // El plugin no tiene método handleCommand, continuar con el siguiente
+                continue;
+            } catch (Exception e) {
+                LOGGER.warning("Error executing plugin command: " + e.getMessage());
+            }
+        }
+        return false; // Ningún plugin manejó el comando
     }
 
     private static void handleShutdown() {
@@ -1009,6 +1057,8 @@ public class Skyfall {
         LOGGER.info(" - plugins: List loaded plugins");
         LOGGER.info(" - version: Show version information");
         LOGGER.info(" - help: Show this help message");
+        LOGGER.info(" - devtools/pdt: Plugin development tools");
+        LOGGER.info(" - plugin/pl: Plugin management commands");
     }
 
     // Interface para plugins
@@ -1018,6 +1068,12 @@ public class Skyfall {
         String getName();
         String getVersion();
         default void setAPI(SkyfallAPI api) {}
+        default void setDataFolder(File dataFolder) {}
+
+        // Nuevo método opcional para manejar comandos
+        default boolean handleCommand(String command, String[] args) {
+            return false;
+        }
     }
 
     // Clase API para plugins

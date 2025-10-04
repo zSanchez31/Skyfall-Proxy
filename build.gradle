@@ -32,7 +32,7 @@ application {
 shadowJar {
     archiveBaseName.set('Skyfall')
     archiveClassifier.set('')
-    archiveVersion.set(version)
+    archiveVersion.set('')
 
     manifest {
         attributes(
@@ -77,7 +77,7 @@ test {
 }
 
 task copyConfig(type: Copy) {
-    from 'config.yml'
+    from 'src/main/resources/config.yml'
     into 'build/dist'
 }
 
