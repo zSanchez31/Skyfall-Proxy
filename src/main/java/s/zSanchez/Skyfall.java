@@ -98,16 +98,43 @@ public class Skyfall {
             LOGGER.setLevel(Level.ALL);
 
             ConsoleHandler consoleHandler = new ConsoleHandler();
-            consoleHandler.setLevel(Level.INFO);
+            consoleHandler.setLevel(Level.ALL);
             consoleHandler.setFormatter(new SimpleFormatter() {
                 private static final String format = "[%1$tT INFO]: %2$s%n";
 
                 @Override
                 public synchronized String format(LogRecord lr) {
+                    String message = lr.getMessage();
+                    // Convertir códigos de color & a ANSI para macOS/Linux
+                    message = convertColorsToANSI(message);
                     return String.format(format,
                             new Date(lr.getMillis()),
-                            lr.getMessage()
+                            message
                     );
+                }
+
+                private String convertColorsToANSI(String text) {
+                    if (text == null) return "";
+
+                    return text.replace("&0", "\u001B[30m")  // Black
+                            .replace("&1", "\u001B[34m")  // Dark Blue
+                            .replace("&2", "\u001B[32m")  // Dark Green
+                            .replace("&3", "\u001B[36m")  // Dark Aqua
+                            .replace("&4", "\u001B[31m")  // Dark Red
+                            .replace("&5", "\u001B[35m")  // Dark Purple
+                            .replace("&6", "\u001B[33m")  // Gold
+                            .replace("&7", "\u001B[37m")  // Gray
+                            .replace("&8", "\u001B[90m")  // Dark Gray
+                            .replace("&9", "\u001B[94m")  // Blue
+                            .replace("&a", "\u001B[92m")  // Green
+                            .replace("&b", "\u001B[96m")  // Aqua
+                            .replace("&c", "\u001B[91m")  // Red
+                            .replace("&d", "\u001B[95m")  // Light Purple
+                            .replace("&e", "\u001B[93m")  // Yellow
+                            .replace("&f", "\u001B[97m")  // White
+                            .replace("&l", "\u001B[1m")   // Bold
+                            .replace("&n", "\u001B[4m")   // Underline
+                            .replace("&r", "\u001B[0m");  // Reset
                 }
             });
             LOGGER.addHandler(consoleHandler);
@@ -119,7 +146,22 @@ public class Skyfall {
 
             FileHandler fileHandler = new FileHandler("logs/skyfall.log", 10 * 1024 * 1024, 5, true);
             fileHandler.setLevel(Level.ALL);
-            fileHandler.setFormatter(new SimpleFormatter());
+            fileHandler.setFormatter(new SimpleFormatter() {
+                private static final String format = "[%1$tT INFO]: %2$s%n";
+
+                @Override
+                public synchronized String format(LogRecord lr) {
+                    // En el archivo de log, quitar los códigos de color
+                    String message = lr.getMessage();
+                    if (message != null) {
+                        message = message.replaceAll("&[0-9a-fk-or]", "");
+                    }
+                    return String.format(format,
+                            new Date(lr.getMillis()),
+                            message
+                    );
+                }
+            });
             LOGGER.addHandler(fileHandler);
 
         } catch (IOException e) {
@@ -477,7 +519,7 @@ public class Skyfall {
 
         int totalOnline = onlinePlayers.values().stream().mapToInt(Integer::intValue).sum();
         int maxPlayers = (int) listener.getOrDefault("max_players", 100);
-        String motd = (String) listener.getOrDefault("motd", "§6§lSkyfall Proxy\\n§7¡Servidor en línea!");
+        String motd = (String) listener.getOrDefault("motd", "&6&lSkyfall Proxy\\n&7¡Servidor en línea!");
         motd = motd.replace("&", "§");
 
         String json = "{\"version\":{\"name\":\"Skyfall 1.20.1\",\"protocol\":763}," +
